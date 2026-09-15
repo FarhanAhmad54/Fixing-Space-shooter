@@ -21,25 +21,26 @@
   <div id="game-container"><canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas></div>
 <script>
 (function(){
-  function hideBoot(){var b=document.getElementById('boot');if(b&&!b.classList.contains('hidden')){b.classList.add('hidden');window.StarfallPlatform&&window.StarfallPlatform.loadingFinished&&window.StarfallPlatform.loadingFinished();}}
+  function setBootError(msg){var s=document.getElementById('boot-status');if(s)s.textContent='ENGINE ERROR: '+String(msg).substring(0,180);}
+  function hideBoot(){var b=document.getElementById('boot');if(b&&!b.classList.contains('hidden')){b.classList.add('hidden');if(window.StarfallPlatform&&window.StarfallPlatform.loadingFinished)window.StarfallPlatform.loadingFinished();}}
   window.addEventListener('keydown',function(e){if([32,37,38,39,40].indexOf(e.keyCode)!==-1)e.preventDefault();},false);
   window.Module={
-    arguments:['/home/web_user/love/game.love'],
+    /* love.js expects the packaged game as a relative argument. */
+    arguments:['./game.love'],
     INITIAL_MEMORY:134217728,
     canvas:document.getElementById('canvas'),
     print:function(text){
       if(typeof text==='string'&&text.indexOf('[PORTAL]:')===0){var rest=text.substring(9),i=rest.indexOf(':'),cmd=i<0?rest:rest.substring(0,i),arg=i<0?'':rest.substring(i+1);if(window.StarfallPlatform&&typeof window.StarfallPlatform[cmd]==='function')window.StarfallPlatform[cmd](arg);if(cmd==='loadingFinished'||cmd==='ready')hideBoot();return;}
-      if(typeof text==='string'&&(text.indexOf('Error:')>-1||text.indexOf('[LUA ERROR]')>-1)){var s=document.getElementById('boot-status');if(s)s.textContent='ENGINE ERROR: '+text.substring(0,120);}console.log(text);
+      if(typeof text==='string'&&(text.indexOf('Error:')>-1||text.indexOf('[LUA ERROR]')>-1)){setBootError(text);}console.log(text);
     },
-    printErr:function(text){console.error(text);if(typeof text==='string'&&text.indexOf('Error:')>-1){var s=document.getElementById('boot-status');if(s)s.textContent='ENGINE ERROR: '+text.substring(0,120);}},
+    printErr:function(text){console.error(text);if(typeof text==='string'&&(text.indexOf('Error:')>-1||text.indexOf('Cannot load game')>-1||text.indexOf('does not exist')>-1))setBootError(text);},
     postRun:[function(){hideBoot();}],
-    monitorRunDependencies:function(left){var bar=document.getElementById('boot-bar');if(bar&&this.totalDependencies){bar.style.width=Math.round((1-left/this.totalDependencies)*100)+'%';}else if(bar&&left===0)bar.style.width='100%';}
+    monitorRunDependencies:function(left){var bar=document.getElementById('boot-bar');if(bar&&this.totalDependencies>0)bar.style.width=Math.round((1-left/this.totalDependencies)*100)+'%';else if(bar&&left===0)bar.style.width='100%';}
   };
-  window.Module.preRun=[function(){try{if(Module.FS){try{Module.FS.mkdir('/home')}catch(e){}try{Module.FS.mkdir('/home/web_user')}catch(e){}try{Module.FS.mkdir('/home/web_user/love')}catch(e){}}}catch(e){}}];
-  function applicationLoad(){if(window._starfallLoveStarted)return;window._starfallLoveStarted=true;if(typeof Love==='function'){var p=Love(Module);if(p&&p.then)p.then(hideBoot).catch(function(e){console.error(e);});}else{var s=document.getElementById('boot-status');if(s)s.textContent='ENGINE SCRIPT ERROR: love.js failed to load';}}
+  function applicationLoad(){if(window._starfallLoveStarted)return;window._starfallLoveStarted=true;if(typeof Love==='function'){try{var p=Love(Module);if(p&&p.catch)p.catch(function(e){console.error(e);setBootError(e);});}catch(e){console.error(e);setBootError(e);}}else{setBootError('love.js failed to export Love');}}
 </script>
 <script src="game.js"></script>
-<script src="love.js" onload="applicationLoad()"></script>
+<script src="love.js" onload="applicationLoad()" onerror="function(){setBootError('love.js failed to load')}" ></script>
 <script>setTimeout(function(){if(!window._starfallLoveStarted)applicationLoad();},0);</script>
 </body>
 </html>
