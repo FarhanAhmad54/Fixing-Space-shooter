@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Starfall Vengeance</title>
+
+  <!-- CrazyGames SDK v3 — Strictly required in <head> for platform QA detection -->
+  <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+
+  <!-- Platform Bridge for CrazyGames & WebAssembly lifecycle -->
+  <script src="platform-bridge.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #03050d;
+      overflow: hidden;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    #game-container {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #03050d;
+    }
+    canvas#canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      touch-action: none;
+      outline: none;
+      image-rendering: auto;
+    }
+    #boot {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, #0c1527 0%, #03050d 100%);
+      color: #9fdcff;
+      z-index: 999;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+    }
+    #boot.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .boot-card {
+      text-align: center;
+      max-width: 440px;
+      padding: 30px;
+    }
+    .boot-title {
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: 4px;
+      color: #4dc2ff;
+      text-shadow: 0 0 20px rgba(77, 194, 255, 0.6);
+      margin-bottom: 6px;
+    }
+    .boot-badge {
+      display: inline-block;
+      font-size: 11px;
+      letter-spacing: 3px;
+      font-weight: 700;
+      color: #ffaa33;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+    .progress-bar-wrap {
+      width: 280px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      overflow: hidden;
+      margin: 0 auto 14px auto;
+      border: 1px solid rgba(77, 194, 255, 0.2);
+    }
+    .progress-bar-inner {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #0088ff, #00ffcc);
+      box-shadow: 0 0 10px #00ffcc;
+      transition: width 0.2s ease;
+    }
+    .boot-status {
+      font-size: 13px;
+      color: #7bbcd9;
+      letter-spacing: 1px;
+      min-height: 18px;
+    }
+  </style>
+</head>
+<body>
+<div id="boot">
+  <div class="boot-card">
+    <div class="boot-title">STARFALL</div>
+    <div class="boot-badge">Vengeance — Hyperion Fleet</div>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-inner" id="boot-bar"></div>
+    </div>
+    <div class="boot-status" id="boot-status">INITIALIZING SYSTEMS…</div>
+  </div>
+</div>
+
+<div id="game-container">
+  <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+</div>
+
+<script>
+  // Signal CrazyGames loadingStart as early as possible
+  if (window.StarfallPlatform && window.StarfallPlatform.loadingStart) {
+    window.StarfallPlatform.loadingStart();
+  }
+
+  function hideBoot() {
+    var boot = document.getElementById("boot");
+    if (boot && !boot.classList.contains("hidden")) {
+      boot.classList.add("hidden");
+      if (window.StarfallPlatform && window.StarfallPlatform.loadingFinished) {
+        window.StarfallPlatform.loadingFinished();
+      }
+    }
+  }
+
+  window.onload = function() { window.focus(); };
+  window.onclick = function() { window.focus(); };
+
+  window.addEventListener("keydown", function(e) {
+    if ([32, 37, 38, 39, 40].indexOf(e.keyCode) > -1) {
+      e.preventDefault();
+    }
+  }, false);
+
+  window.Module = {
+    arguments: ["/home/web_user/love/game.love"],
+    INITIAL_MEMORY: 134217728,
+    onRuntimeInitialized: function() {
+      console.log("[STARFALL] WASM loaded");
+      console.log("[STARFALL] LÖVE runtime initialized");
+    },
+    preMain: function() {
+      console.log("[STARFALL] LÖVE runtime created");
+    },
+    postRun: [function() {
+      console.log("[STARFALL] LÖVE engine postRun reached — main loop started");
+    }],
+    print: function(text) {
+      if (typeof text === "string" && text.indexOf("[PORTAL]:") === 0) {
+        var rest = text.substring(9);
+        var colon = rest.indexOf(":");
+        var cmd = colon === -1 ? rest : rest.substring(0, colon);
+        var arg = colon === -1 ? "" : rest.substring(colon + 1);
+
+        if (cmd === "loadingFinished" || cmd === "firstFrameRendered" || cmd === "ready") {
+          console.log("[STARFALL] Engine readiness confirmed via " + cmd);
+          hideBoot();
+        }
+
+        if (cmd === "engineError") {
+          console.error("[STARFALL FATAL LUA ERROR]:", arg);
+          var status = document.getElementById('boot-status');
+          if (status) {
+            status.style.color = "#ff4444";
+            status.textContent = "LUA ERROR: " + arg.substring(0, 120);
+          }
+          hideBoot();
+          return;
+        }
+
+        if (cmd === "init") {
+          window.StarfallSaveDir = arg;
+          console.log("[StarfallPlatform] Save directory registered:", arg);
+          return;
+        }
+
+        if (window.StarfallPlatform && typeof window.StarfallPlatform[cmd] === "function") {
+          window.StarfallPlatform[cmd](arg);
+        }
+        return;
+      }
+      if (typeof text === "string" && (text.indexOf("Error:") > -1 || text.indexOf("[LUA ERROR]") > -1 || text.indexOf("Cannot load") > -1)) {
+        console.error("[STARFALL ENGINE ERROR]:", text);
+        var status = document.getElementById('boot-status');
+        if (status) {
+          status.style.color = "#ff4444";
+          status.textContent = "ENGINE ERROR: " + text.substring(0, 120);
+        }
+      }
+      console.log(text);
+    },
+    printErr: function(text) {
+      console.error(text);
+      if (typeof text === "string" && (text.indexOf("Error:") > -1 || text.indexOf("Cannot load") > -1 || text.indexOf("does not exist") > -1 || text.indexOf("abort(") > -1)) {
+        var status = document.getElementById('boot-status');
+        if (status) {
+          status.style.color = "#ff4444";
+          status.textContent = "ENGINE ERROR: " + text.substring(0, 120);
+        }
+      }
+    },
+    preRun: [function() {
+      try {
+        if (Module.FS) {
+          try { Module.FS.mkdir('/home'); } catch(e) {}
+          try { Module.FS.mkdir('/home/web_user'); } catch(e) {}
+          try { Module.FS.mkdir('/home/web_user/love'); } catch(e) {}
+          console.log("[STARFALL] Virtual FS cwd:", Module.FS.cwd());
+          try {
+            var loveDir = Module.FS.readdir('/home/web_user/love');
+            if (loveDir.indexOf('game.love') !== -1) {
+              console.log("[STARFALL] game.love found at /home/web_user/love/game.love");
+            } else {
+              console.warn("[STARFALL] game.love not yet in /home/web_user/love/: " + JSON.stringify(loveDir));
+            }
+          } catch(e) {
+            console.warn("[STARFALL] /home/web_user/love/ not yet available (will be created by preloader)");
+          }
+        }
+      } catch (e) {
+        console.warn("[STARFALL] preRun check:", e);
+      }
+    }],
+    canvas: (function() {
+      var c = document.getElementById('canvas');
+      c.addEventListener("webglcontextlost", function(e) {
+        console.warn('WebGL context lost. Attempting recovery...');
+        e.preventDefault();
+      }, false);
+      return c;
+    })(),
+    setStatus: function(text) {
+      var status = document.getElementById('boot-status');
+      if (status && text) status.textContent = text;
+    },
+    totalDependencies: 0,
+    remainingDependencies: 0,
+    monitorRunDependencies: function(left) {
+      this.remainingDependencies = left;
+      this.totalDependencies = Math.max(this.totalDependencies, left);
+      var pct = this.totalDependencies > 0 ? Math.round(((this.totalDependencies - left) / this.totalDependencies) * 100) : 100;
+      var bar = document.getElementById('boot-bar');
+      if (bar) bar.style.width = pct + '%';
+    }
+  };
+
+  (function bootTimeoutWatchdog() {
+    setTimeout(function() {
+      var boot = document.getElementById("boot");
+      if (boot && !boot.classList.contains("hidden")) {
+        var status = document.getElementById("boot-status");
+        if (status && !status.textContent.startsWith("ENGINE ERROR") && !status.textContent.startsWith("LUA ERROR")) {
+          status.style.color = "#ffbb44";
+          status.textContent = "WAITING FOR ENGINE INITIALIZATION (Dependencies: " + Module.remainingDependencies + ")";
+          console.warn("[STARFALL] Boot watchdog: Engine has not hidden boot after 15s. Remaining dependencies:", Module.remainingDependencies);
+        }
+      }
+    }, 15000);
+  })();
+
+  function applicationLoad() {
+    if (window._starfallLoveStarted) return;
+    window._starfallLoveStarted = true;
+    console.log("[STARFALL] applicationLoad invoked. typeof Love:", typeof Love);
+    if (typeof Love === "function") {
+      var p = Love(Module);
+      if (p && typeof p.then === "function") {
+        p.then(function(mod) {
+          console.log("[STARFALL] Love.ready resolved successfully");
+        }).catch(function(err) {
+          console.error("[STARFALL] Love.ready rejected with error:", err);
+          var status = document.getElementById("boot-status");
+          if (status) {
+            status.style.color = "#ff4444";
+            status.textContent = "ENGINE INIT ERROR: " + (err && err.message ? err.message : err);
+          }
+        });
+      }
+    } else {
+      console.error("[STARFALL] Love is not a function!");
+      var status = document.getElementById("boot-status");
+      if (status) {
+        status.style.color = "#ff4444";
+        status.textContent = "ENGINE SCRIPT ERROR: love.js failed to export Love";
+      }
+    }
+  }
+</script>
+
+<script type="text/javascript" src="game.js"></script>
+<script type="text/javascript" src="love.js" onload="applicationLoad(this)"></script>
+<script type="text/javascript">
+  if (!window._starfallLoveStarted) {
+    applicationLoad();
+  }
+</script>
+</body>
+</html>
